@@ -1172,7 +1172,8 @@ func (interp *Interpreter) cfg(root *node, sc *scope, importPath, pkgName string
 					}
 				case n.anc.kind == returnStmt:
 					// Store result directly to frame output location, to avoid a frame copy.
-					n.findex = 0
+					// The location is the position of the call in the return values.
+					n.findex = childPos(n)
 				case bname == "cap" && isInConstOrTypeDecl(n):
 					t := n.child[1].typ.TypeOf()
 					for t.Kind() == reflect.Ptr {
