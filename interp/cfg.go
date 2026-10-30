@@ -715,6 +715,11 @@ func (interp *Interpreter) cfg(root *node, sc *scope, importPath, pkgName string
 				// operation and setting the source location directly to the destination
 				// location in the frame.
 				//
+				// The call, receive and composite literal optimizations disable the
+				// assign operation (n.gen = nop) for the whole statement, so they only
+				// apply to single assignments: in a multiple assignment, the other
+				// values would never be assigned, and writing directly to a destination
+				// would break the two-phase semantics (e.g. a, b = f(b), g(a)).
 				switch {
 				case n.action != aAssign:
 					// Do not skip assign operation if it is combined with another operator.
@@ -726,7 +731,7 @@ func (interp *Interpreter) cfg(root *node, sc *scope, importPath, pkgName string
 					dest.gen = nop
 				case isFuncField(dest):
 					// Setting a struct field of function type requires an extra step. Do not optimize.
-				case isCall(src) && !isInterfaceSrc(dest.typ) && n.kind != defineStmt:
+				case isCall(src) && n.nleft == 1 && !isInterfaceSrc(dest.typ) && n.kind != defineStmt:
 					// Call action may perform the assignment directly.
 					if dest.typ.id() != src.typ.id() {
 						// Skip optimitization if returned type doesn't match assigned one.
@@ -738,12 +743,12 @@ func (interp *Interpreter) cfg(root *node, sc *scope, importPath, pkgName string
 					if src.typ.untyped && !dest.typ.untyped {
 						src.typ = dest.typ
 					}
-				case src.action == aRecv:
+				case src.action == aRecv && n.nleft == 1:
 					// Assign by reading from a receiving channel.
 					n.gen = nop
 					src.findex = dest.findex // Set recv address to LHS.
 					dest.typ = src.typ
-				case src.action == aCompositeLit:
+				case src.action == aCompositeLit && n.nleft == 1:
 					if dest.typ.cat == valueT && dest.typ.rtype.Kind() == reflect.Interface {
 						// Skip optimisation for assigned interface.
 						break
